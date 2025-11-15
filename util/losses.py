@@ -86,13 +86,15 @@ def mmd_loss(source_samples, target_samples, weight, scope=None):
       1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 5, 10, 15, 20, 25, 30, 35, 100,
       1e3, 1e4, 1e5, 1e6
   ]
+  # Explicitly cast sigmas to Const.FLOAT to ensure dtype consistency
+  # This prevents XLA JIT compilation errors with mixed float32/float64
   gaussian_kernel = partial(
-      gaussian_kernel_matrix, sigmas=tf.constant(sigmas))
+      gaussian_kernel_matrix, sigmas=tf.constant(sigmas, dtype=Const.FLOAT))
 
   loss_value = maximum_mean_discrepancy(
       source_samples, target_samples, kernel=gaussian_kernel)
   loss_value = tf.maximum(tf.cast(1e-4, Const.FLOAT), loss_value) * weight
-  assert_op = tf.Assert(tf.is_finite(loss_value), [loss_value])
+  assert_op = tf.Assert(tf.math.is_finite(loss_value), [loss_value])
   with tf.control_dependencies([assert_op]):
     tag = 'MMD Loss'
     if scope:
@@ -127,7 +129,7 @@ def correlation_loss(source_samples, target_samples, weight, scope=None):
 
     corr_loss = tf.reduce_mean(tf.square(source_cov - target_cov)) * weight
 
-  assert_op = tf.Assert(tf.is_finite(corr_loss), [corr_loss])
+  assert_op = tf.Assert(tf.math.is_finite(corr_loss), [corr_loss])
   with tf.control_dependencies([assert_op]):
     tag = 'Correlation Loss'
     if scope:
@@ -177,7 +179,7 @@ def dann_loss(source_samples, target_samples, weight, scope=None):
   domain_accuracy = utils.accuracy(
       tf.round(domain_predictions), domain_selection_mask)
 
-  assert_op = tf.Assert(tf.is_finite(domain_loss), [domain_loss])
+  assert_op = tf.Assert(tf.math.is_finite(domain_loss), [domain_loss])
   with tf.control_dependencies([assert_op]):
     tag_loss = 'losses/domain_loss'
     tag_accuracy = 'losses/domain_accuracy'
@@ -217,7 +219,7 @@ def difference_loss(private_samples, shared_samples, weight=1.0, name=''):
 
   tf.summary.scalar('losses/Difference Loss {}'.format(name),
                                        cost)
-  assert_op = tf.Assert(tf.is_finite(cost), [cost])
+  assert_op = tf.Assert(tf.math.is_finite(cost), [cost])
   with tf.control_dependencies([assert_op]):
     tf.compat.v1.losses.add_loss(cost)
 
@@ -263,7 +265,7 @@ def log_quaternion_loss_batch(predictions, labels, params):
         [internal_dot_products, tf.shape(internal_dot_products)],
         'internal_dot_products:')
 
-  logcost = tf.log(1e-4 + 1 - tf.abs(internal_dot_products))
+  logcost = tf.math.log(1e-4 + 1 - tf.abs(internal_dot_products))
   return logcost
 
 

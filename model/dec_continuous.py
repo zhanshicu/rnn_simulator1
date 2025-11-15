@@ -6,12 +6,12 @@ import tensorflow as tf
 import numpy as np
 
 from model.consts import Const
-from model.model_beh_continuous import ModelBehContinuous
+from model.model_beh_continuous_7d import ModelBehContinuous7D
 from model.rnn_cell import GRUCell2
 from util import DLogger
 
 
-class DECRNNContinuous(ModelBehContinuous):
+class DECRNNContinuous(ModelBehContinuous7D):
     """
     Decoder that generates continuous feature predictions.
 
@@ -29,7 +29,7 @@ class DECRNNContinuous(ModelBehContinuous):
     """
 
     def __init__(self, n_cells, feature_dim, s_size, n_samples, z, n_T, static_loop):
-        super().__init__(feature_dim, s_size)
+        super().__init__(feature_dim, reward_dim=feature_dim, s_size=s_size)
 
         DLogger.logger().debug("Continuous decoder created with n_cells: " + str(n_cells))
 
@@ -71,13 +71,15 @@ class DECRNNContinuous(ModelBehContinuous):
         step_size = tf.ones([tf.shape(self.rnn_in)[0]], dtype=tf.int32) * tf.shape(self.rnn_in)[1]
 
         # Run RNN forward
-        if static_loop:
-            self.state_track, self.last_state = self.cell.static_rnn(self.rnn_in, step_size)
-        else:
-            self.state_track, self.last_state = self.cell.dynamic_rnn(self.rnn_in, step_size)
-        # state_track: [n_samples, n_batches, n_timesteps+1, n_cells]
+        # Force CPU execution to bypass XLA JIT compilation
+        with tf.device('/CPU:0'):
+            if static_loop:
+                self.state_track, self.last_state = self.cell.static_rnn(self.rnn_in, step_size)
+            else:
+                self.state_track, self.last_state = self.cell.dynamic_rnn(self.rnn_in, step_size)
+            # state_track: [n_samples, n_batches, n_timesteps+1, n_cells]
 
-        sstate_track, slast_state = self.scell.dynamic_rnn(self.rnn_in, step_size)
+            sstate_track, slast_state = self.scell.dynamic_rnn(self.rnn_in, step_size)
 
         # Generate continuous feature predictions
         # Predictions: linear projection from hidden state to feature space
@@ -175,7 +177,7 @@ class DECRNNContinuous(ModelBehContinuous):
     def rand_without_replacement(self, n_rands):
         """Random permutation for baseline comparison"""
         probs = tf.ones(shape=(n_rands,), dtype=Const.FLOAT) / tf.cast(n_rands, dtype=Const.FLOAT)
-        ztmp = -tf.log(-tf.log(tf.compat.v1.random_uniform(tf.shape(probs), 0, 1, dtype=Const.FLOAT)))
+        ztmp = -tf.math.log(-tf.math.log(tf.compat.v1.random_uniform(tf.shape(probs), 0, 1, dtype=Const.FLOAT)))
         _, indices = tf.nn.top_k(probs + ztmp, n_rands)
         return indices
 
@@ -196,7 +198,7 @@ class DECRNNContinuous(ModelBehContinuous):
             W1, W2, W_out, b1, b2, b_out: RNN weight matrices
         """
         W1_dim, b1_dim, W2_dim, b2_dim = GRUCell2.get_weight_dims(
-            self.feature_dim + s_size + 1, n_cells
+            self.feature_dim + s_size + self.reward_dim, n_cells
         )
         W_out_dim = [n_cells, feature_dim]
         b_out_dim = [feature_dim]
@@ -206,11 +208,13 @@ class DECRNNContinuous(ModelBehContinuous):
                            W_out_dim[0] * W_out_dim[1] + b_out_dim[0])
 
         # Hypernetwork: 3-layer MLP from z to weights
+        # Force CPU execution to bypass XLA JIT compilation
         with tf.compat.v1.variable_scope('dec'):
-            dense1 = tf.compat.v1.layers.dense(inputs=z, units=100, activation=tf.nn.tanh)
-            dense2 = tf.compat.v1.layers.dense(inputs=dense1, units=100, activation=tf.nn.tanh)
-            dense3 = tf.compat.v1.layers.dense(inputs=dense2, units=100, activation=tf.nn.tanh)
-            output = tf.compat.v1.layers.dense(inputs=dense3, units=total_weight_dim, activation=None)
+            with tf.device('/CPU:0'):
+                dense1 = tf.compat.v1.layers.dense(inputs=z, units=100, activation=tf.nn.tanh)
+                dense2 = tf.compat.v1.layers.dense(inputs=dense1, units=100, activation=tf.nn.tanh)
+                dense3 = tf.compat.v1.layers.dense(inputs=dense2, units=100, activation=tf.nn.tanh)
+                output = tf.compat.v1.layers.dense(inputs=dense3, units=total_weight_dim, activation=None)
 
         # Unpack weights
         with tf.compat.v1.variable_scope('dec_init'):

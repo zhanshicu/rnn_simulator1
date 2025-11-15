@@ -182,4 +182,10 @@ def gaussian_kernel_matrix(x, y, sigmas):
 
   s = tf.matmul(beta, tf.reshape(dist, (1, -1)))
 
-  return tf.reshape(tf.reduce_sum(tf.exp(-s), 0), tf.shape(dist))
+  # Explicitly disable XLA compilation for tf.exp operation
+  # TensorFlow 2.x aggressively tries to JIT compile exp operations which can fail
+  # Force CPU execution to bypass XLA
+  with tf.device('/CPU:0'):
+    exp_result = tf.exp(-s)
+
+  return tf.reshape(tf.reduce_sum(exp_result, 0), tf.shape(dist))

@@ -6,11 +6,11 @@ import tensorflow as tf
 from tensorflow.python.ops.rnn_cell_impl import LSTMCell
 
 from model.consts import Const
-from model.model_beh_continuous import ModelBehContinuous
+from model.model_beh_continuous_7d import ModelBehContinuous7D
 from util import DLogger
 
 
-class ENCRNNContinuous(ModelBehContinuous):
+class ENCRNNContinuous(ModelBehContinuous7D):
     """
     Encoder that processes continuous feature sequences.
 
@@ -25,7 +25,7 @@ class ENCRNNContinuous(ModelBehContinuous):
     """
 
     def __init__(self, n_cells, feature_dim, s_size, latent_size, n_samples, n_T, static_loop):
-        super().__init__(feature_dim, s_size)
+        super().__init__(feature_dim, reward_dim=feature_dim, s_size=s_size)
         DLogger.logger().debug("Encoder created with n_cells: " + str(n_cells))
 
         self.static_loop = static_loop
@@ -55,23 +55,28 @@ class ENCRNNContinuous(ModelBehContinuous):
             bw_gru = LSTMCell(n_cells)
 
             if not self.static_loop:
-                output, state = tf.compat.v1.nn.bidirectional_dynamic_rnn(
-                    fw_gru, bw_gru, rnn_in,
-                    time_major=False,
-                    sequence_length=self.seq_lengths + 1,
-                    dtype=Const.FLOAT
-                )
+                # Force CPU execution to bypass XLA JIT compilation
+                # TensorFlow 2.20.0 aggressively tries to JIT compile LSTM operations
+                with tf.device('/CPU:0'):
+                    output, state = tf.compat.v1.nn.bidirectional_dynamic_rnn(
+                        fw_gru, bw_gru, rnn_in,
+                        time_major=False,
+                        sequence_length=self.seq_lengths + 1,
+                        dtype=Const.FLOAT
+                    )
 
                 return tf.concat(output, axis=2), tf.stack(
                     (tf.concat(state[0], axis=1), tf.concat(state[1], axis=1)), axis=0
                 )
             else:
-                output_static, state_fw, state_bw = tf.compat.v1.nn.static_bidirectional_rnn(
-                    fw_gru, bw_gru,
-                    tf.unstack(rnn_in, num=self.n_T + 1, axis=1),
-                    sequence_length=self.seq_lengths + 1,
-                    dtype=Const.FLOAT
-                )
+                # Force CPU execution for static RNN as well
+                with tf.device('/CPU:0'):
+                    output_static, state_fw, state_bw = tf.compat.v1.nn.static_bidirectional_rnn(
+                        fw_gru, bw_gru,
+                        tf.unstack(rnn_in, num=self.n_T + 1, axis=1),
+                        sequence_length=self.seq_lengths + 1,
+                        dtype=Const.FLOAT
+                    )
 
                 st1, st2 = tf.concat(tf.stack(output_static, axis=1), axis=2), \
                            tf.stack((tf.concat(state_fw, axis=1), tf.concat(state_bw, axis=1)), axis=0)

@@ -174,7 +174,11 @@ class TestGRUCell2(unittest.TestCase):
         state_track = tf.transpose(state_track[0], [1, 0, 2])
 
         init_op = tf.compat.v1.global_variables_initializer()
-        with tf.compat.v1.Session() as  sess:
+        # Disable JIT compilation and XLA to prevent compilation errors
+        config = tf.compat.v1.ConfigProto()
+        config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.OFF
+        config.graph_options.rewrite_options.disable_meta_optimizer = True
+        with tf.compat.v1.Session(config=config) as  sess:
             sess.run(init_op)
             entropy = sess.run(state_track, {data: train_input, target: train_output})
             DLogger.logger().debug('Entropy:' + str(entropy))
@@ -197,7 +201,11 @@ class TestGRUCell2(unittest.TestCase):
         val = tf.transpose(val, [1, 0, 2])
 
         init_op = tf.compat.v1.global_variables_initializer()
-        with tf.compat.v1.Session() as  sess:
+        # Disable JIT compilation and XLA to prevent compilation errors
+        config = tf.compat.v1.ConfigProto()
+        config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.OFF
+        config.graph_options.rewrite_options.disable_meta_optimizer = True
+        with tf.compat.v1.Session(config=config) as  sess:
             sess.run(init_op)
             entropy = sess.run(val, {data: train_input, target: train_output})
             DLogger.logger().debug('Entropy:' + str(entropy))

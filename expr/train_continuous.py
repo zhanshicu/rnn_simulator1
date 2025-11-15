@@ -8,9 +8,27 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+# Set environment variables BEFORE importing TensorFlow
+# Use legacy Keras (TF-Keras) instead of Keras 3 for compatibility
+os.environ['TF_USE_LEGACY_KERAS'] = '1'
+
+# Disable XLA JIT compilation via environment variables
+os.environ['TF_XLA_FLAGS'] = '--tf_xla_auto_jit=0 --tf_xla_enable_xla_devices=false'
+os.environ['TF_XLA_ENABLE_XLA_DEVICES'] = 'false'
+# Additional XLA disabling for TensorFlow 2.20.0+
+os.environ['TF_DISABLE_XLA'] = '1'
+os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=""'
+
 import tensorflow as tf
 # Enable TF1.x compatibility mode (required for Session-based code)
 tf.compat.v1.disable_eager_execution()
+
+# Import RewriterConfig for session configuration
+try:
+    from tensorflow.core.protobuf import rewriter_config_pb2
+except ImportError:
+    # Fallback for older TensorFlow versions
+    rewriter_config_pb2 = None
 
 import numpy as np
 from expr.simulate_salesperson_data_7d_rewards import SalespersonSimulator7D
@@ -24,13 +42,16 @@ def split_train_test(batched_data, train_ratio=0.8):
     Split data into train and test sets.
 
     Args:
-        batched_data: Dictionary with features, rewards, seq_lengths, etc.
+        batched_data: Dictionary with actions, rewards, seq_lengths, etc.
         train_ratio: Fraction of data for training
 
     Returns:
         train_data, test_data: Dictionaries with split data
     """
-    n_samples = batched_data['features'].shape[0]
+    # Support both 'actions' and 'features' as key names for backward compatibility
+    feature_key = 'actions' if 'actions' in batched_data else 'features'
+
+    n_samples = batched_data[feature_key].shape[0]
     n_train = int(n_samples * train_ratio)
 
     # Shuffle indices
@@ -39,7 +60,7 @@ def split_train_test(batched_data, train_ratio=0.8):
     test_indices = indices[n_train:]
 
     train_data = {
-        'features': batched_data['features'][train_indices],
+        'actions': batched_data[feature_key][train_indices],
         'rewards': batched_data['rewards'][train_indices],
         'seq_lengths': batched_data['seq_lengths'][train_indices],
         'ids': [batched_data['ids'][i] for i in train_indices],
@@ -48,7 +69,7 @@ def split_train_test(batched_data, train_ratio=0.8):
     }
 
     test_data = {
-        'features': batched_data['features'][test_indices],
+        'actions': batched_data[feature_key][test_indices],
         'rewards': batched_data['rewards'][test_indices],
         'seq_lengths': batched_data['seq_lengths'][test_indices],
         'ids': [batched_data['ids'][i] for i in test_indices],
@@ -64,13 +85,13 @@ def create_batches(data, batch_size):
     Create mini-batches from data.
 
     Args:
-        data: Dictionary with features, rewards, seq_lengths
+        data: Dictionary with actions, rewards, seq_lengths
         batch_size: Batch size
 
     Returns:
         List of batch dictionaries
     """
-    n_samples = data['features'].shape[0]
+    n_samples = data['actions'].shape[0]
     n_batches = (n_samples + batch_size - 1) // batch_size
 
     batches = []
@@ -79,7 +100,7 @@ def create_batches(data, batch_size):
         end_idx = min((i + 1) * batch_size, n_samples)
 
         batch = {
-            'features': data['features'][start_idx:end_idx],
+            'actions': data['actions'][start_idx:end_idx],
             'rewards': data['rewards'][start_idx:end_idx],
             'seq_lengths': data['seq_lengths'][start_idx:end_idx]
         }
@@ -121,13 +142,13 @@ def train_model(
     tf.compat.v1.set_random_seed(42)
 
     # Get data dimensions
-    feature_dim = train_data['features'].shape[2]
-    max_seq_length = train_data['features'].shape[1]
+    feature_dim = train_data['actions'].shape[2]
+    max_seq_length = train_data['actions'].shape[1]
 
     DLogger.logger().info(f"Feature dimension: {feature_dim}")
     DLogger.logger().info(f"Max sequence length: {max_seq_length}")
-    DLogger.logger().info(f"Training samples: {train_data['features'].shape[0]}")
-    DLogger.logger().info(f"Test samples: {test_data['features'].shape[0]}")
+    DLogger.logger().info(f"Training samples: {train_data['actions'].shape[0]}")
+    DLogger.logger().info(f"Test samples: {test_data['actions'].shape[0]}")
 
     # Create model
     DLogger.logger().info("Building model...")
@@ -143,19 +164,58 @@ def train_model(
     )
 
     # Define loss and optimizer
-    trainables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
+    # Force CPU execution for gradient computation to bypass XLA JIT compilation
+    with tf.device('/CPU:0'):
+        trainables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
 
-    beta_ph = tf.compat.v1.placeholder(Const.FLOAT, shape=())
-    lr_ph = tf.compat.v1.placeholder(Const.FLOAT, shape=())
+        beta_ph = tf.compat.v1.placeholder(Const.FLOAT, shape=())
+        lr_ph = tf.compat.v1.placeholder(Const.FLOAT, shape=())
 
-    # Combined loss: decoder reconstruction + beta * encoder MMD
-    total_loss = model.dec.loss + beta_ph * model.enc.loss
+        # Combined loss: decoder reconstruction + beta * encoder MMD
+        total_loss = model.dec.loss + beta_ph * model.enc.loss
 
-    optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=lr_ph)
-    train_op = optimizer.minimize(total_loss, var_list=trainables)
+        optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=lr_ph)
+        train_op = optimizer.minimize(total_loss, var_list=trainables)
 
-    # Initialize session
-    sess = tf.compat.v1.Session()
+    # Initialize session with comprehensive XLA/JIT compilation disabled
+    # This prevents "JIT compilation failed" errors with XLA on certain operations
+    config = tf.compat.v1.ConfigProto()
+
+    # Disable all XLA JIT compilation
+    config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.OFF
+
+    # Disable XLA auto-clustering (prevents automatic JIT compilation of subgraphs)
+    config.graph_options.optimizer_options.do_common_subexpression_elimination = False
+    config.graph_options.optimizer_options.do_function_inlining = False
+    config.graph_options.optimizer_options.do_constant_folding = False
+
+    # Disable additional graph rewrites that might trigger XLA
+    config.graph_options.rewrite_options.disable_meta_optimizer = True
+
+    # Set rewrite options to OFF (0 = OFF in the enum)
+    if rewriter_config_pb2 is not None:
+        config.graph_options.rewrite_options.constant_folding = rewriter_config_pb2.RewriterConfig.OFF
+        config.graph_options.rewrite_options.arithmetic_optimization = rewriter_config_pb2.RewriterConfig.OFF
+        config.graph_options.rewrite_options.layout_optimizer = rewriter_config_pb2.RewriterConfig.OFF
+        config.graph_options.rewrite_options.remapping = rewriter_config_pb2.RewriterConfig.OFF
+        config.graph_options.rewrite_options.auto_mixed_precision = rewriter_config_pb2.RewriterConfig.OFF
+        config.graph_options.rewrite_options.pin_to_host_optimization = rewriter_config_pb2.RewriterConfig.OFF
+        config.graph_options.rewrite_options.scoped_allocator_optimization = rewriter_config_pb2.RewriterConfig.OFF
+    else:
+        # Fallback: use integer values directly (OFF = 0)
+        config.graph_options.rewrite_options.constant_folding = 0
+        config.graph_options.rewrite_options.arithmetic_optimization = 0
+        config.graph_options.rewrite_options.layout_optimizer = 0
+        config.graph_options.rewrite_options.remapping = 0
+        config.graph_options.rewrite_options.auto_mixed_precision = 0
+        config.graph_options.rewrite_options.pin_to_host_optimization = 0
+        config.graph_options.rewrite_options.scoped_allocator_optimization = 0
+
+    # Explicitly disable device placement optimization which can trigger XLA
+    config.allow_soft_placement = True
+    config.log_device_placement = False
+
+    sess = tf.compat.v1.Session(config=config)
     sess.run(tf.compat.v1.global_variables_initializer())
 
     DLogger.logger().info("Starting training...")
@@ -172,14 +232,14 @@ def train_model(
         for batch_idx, batch in enumerate(batches):
             # Create feed dict
             enc_dict = model.enc.enc_beh_feed(
-                batch['features'],
+                batch['actions'],
                 batch['rewards'],
                 None,  # No states
                 batch['seq_lengths']
             )
 
             dec_dict = model.dec.dec_beh_feed(
-                batch['features'],
+                batch['actions'],
                 batch['rewards'],
                 None,  # No states
                 batch['seq_lengths']
@@ -211,18 +271,18 @@ def train_model(
         # Evaluate on test set every 10 epochs
         if epoch % 10 == 0:
             # Test evaluation
-            test_batches = create_batches(test_data, batch_size=test_data['features'].shape[0])
+            test_batches = create_batches(test_data, batch_size=test_data['actions'].shape[0])
             test_batch = test_batches[0]
 
             enc_dict_test = model.enc.enc_beh_feed(
-                test_batch['features'],
+                test_batch['actions'],
                 test_batch['rewards'],
                 None,
                 test_batch['seq_lengths']
             )
 
             dec_dict_test = model.dec.dec_beh_feed(
-                test_batch['features'],
+                test_batch['actions'],
                 test_batch['rewards'],
                 None,
                 test_batch['seq_lengths']
@@ -278,7 +338,7 @@ def analyze_latent_representations(sess, model, data, n_samples=10):
 
     # Extract latent codes for all data
     enc_dict = model.enc.enc_beh_feed(
-        data['features'],
+        data['actions'],
         data['rewards'],
         None,
         data['seq_lengths']
@@ -320,13 +380,13 @@ def test_predictions(sess, model, data, person_idx=0):
     DLogger.logger().info(f"Salesperson: {data['ids'][person_idx]} ({data['archetypes'][person_idx]})")
 
     # Get single person data
-    features = data['features'][person_idx:person_idx+1]
+    actions = data['actions'][person_idx:person_idx+1]
     rewards = data['rewards'][person_idx:person_idx+1]
     seq_lengths = data['seq_lengths'][person_idx:person_idx+1]
 
     # Create feed dict
-    enc_dict = model.enc.enc_beh_feed(features, rewards, None, seq_lengths)
-    dec_dict = model.dec.dec_beh_feed(features, rewards, None, seq_lengths)
+    enc_dict = model.enc.enc_beh_feed(actions, rewards, None, seq_lengths)
+    dec_dict = model.dec.dec_beh_feed(actions, rewards, None, seq_lengths)
     feed_dict = {**enc_dict, **dec_dict}
 
     # Get predictions
@@ -337,13 +397,13 @@ def test_predictions(sess, model, data, person_idx=0):
 
     # predictions shape: [n_samples=1, n_batches=1, n_timesteps+1, feature_dim]
     predictions = predictions[0, 0, :-1, :]  # Remove last timestep, take first sample and batch
-    true_features = features[0, :seq_lengths[0], :]
+    true_actions = actions[0, :seq_lengths[0], :]
 
     DLogger.logger().info(f"Learned latent: {latent[0]}")
     DLogger.logger().info(f"True latent: {data['latents'][person_idx]}")
 
     # Compute MSE
-    mse = np.mean((predictions[:seq_lengths[0]] - true_features) ** 2)
+    mse = np.mean((predictions[:seq_lengths[0]] - true_actions) ** 2)
     DLogger.logger().info(f"Reconstruction MSE: {mse:.2f}")
 
     DLogger.logger().info(f"\nFirst 3 timesteps comparison:")
@@ -352,7 +412,7 @@ def test_predictions(sess, model, data, person_idx=0):
         DLogger.logger().info(f"\nTimestep {t}:")
         for feat_idx, feat_name in enumerate(feature_names):
             DLogger.logger().info(
-                f"  {feat_name:10s}: True={true_features[t, feat_idx]:5.1f}, "
+                f"  {feat_name:10s}: True={true_actions[t, feat_idx]:5.1f}, "
                 f"Pred={predictions[t, feat_idx]:5.1f}"
             )
 
