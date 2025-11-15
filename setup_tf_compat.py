@@ -69,3 +69,8 @@ print("✓ Disabled XLA JIT compilation")
 print("\nTensorFlow compatibility setup complete!")
 print("You can now safely import tensorflow and other modules.")
 print()
+
+# Note: After importing TensorFlow, you may need to import rewriter_config_pb2
+# This is handled automatically in expr/train_continuous.py
+# If you need it elsewhere, use:
+#   from tensorflow.core.protobuf import rewriter_config_pb2

@@ -20,6 +20,13 @@ import tensorflow as tf
 # Enable TF1.x compatibility mode (required for Session-based code)
 tf.compat.v1.disable_eager_execution()
 
+# Import RewriterConfig for session configuration
+try:
+    from tensorflow.core.protobuf import rewriter_config_pb2
+except ImportError:
+    # Fallback for older TensorFlow versions
+    rewriter_config_pb2 = None
+
 import numpy as np
 from expr.simulate_salesperson_data_7d_rewards import SalespersonSimulator7D
 from model.rnn2rnn_continuous import HYPMMDContinuous
@@ -179,12 +186,17 @@ def train_model(
 
     # Disable additional graph rewrites that might trigger XLA
     config.graph_options.rewrite_options.disable_meta_optimizer = True
-    config.graph_options.rewrite_options.constant_folding = (
-        tf.compat.v1.rewriter_config_pb2.RewriterConfig.OFF)
-    config.graph_options.rewrite_options.arithmetic_optimization = (
-        tf.compat.v1.rewriter_config_pb2.RewriterConfig.OFF)
-    config.graph_options.rewrite_options.layout_optimizer = (
-        tf.compat.v1.rewriter_config_pb2.RewriterConfig.OFF)
+
+    # Set rewrite options to OFF (0 = OFF in the enum)
+    if rewriter_config_pb2 is not None:
+        config.graph_options.rewrite_options.constant_folding = rewriter_config_pb2.RewriterConfig.OFF
+        config.graph_options.rewrite_options.arithmetic_optimization = rewriter_config_pb2.RewriterConfig.OFF
+        config.graph_options.rewrite_options.layout_optimizer = rewriter_config_pb2.RewriterConfig.OFF
+    else:
+        # Fallback: use integer values directly (OFF = 0)
+        config.graph_options.rewrite_options.constant_folding = 0
+        config.graph_options.rewrite_options.arithmetic_optimization = 0
+        config.graph_options.rewrite_options.layout_optimizer = 0
 
     sess = tf.compat.v1.Session(config=config)
     sess.run(tf.compat.v1.global_variables_initializer())
