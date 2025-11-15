@@ -84,7 +84,7 @@ class ENCRNNContinuous(ModelBehContinuous):
 
         Args:
             features: [n_batches, n_timesteps, feature_dim]
-            rewards: [n_batches, n_timesteps] or [n_batches, n_timesteps, reward_dim]
+            rewards: [n_batches, n_timesteps] or [n_batches, n_timesteps, feature_dim]
             states: [n_batches, n_timesteps, s_size] or None
             seq_lengths: [n_batches] - actual sequence lengths
 

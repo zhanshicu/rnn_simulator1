@@ -26,9 +26,9 @@ class ModelBehContinuous:
         self.feature_dim = feature_dim
 
         # Placeholders for continuous features and rewards
-        # Rewards can be scalar (dim=1) or multi-dimensional (dim=feature_dim)
+        # Rewards should match feature_dim (multi-dimensional rewards)
         self.prev_rewards = self.get_pre_reward()
-        # DIM: nBatches x (nTimesteps + 1) x reward_dim
+        # DIM: nBatches x (nTimesteps + 1) x feature_dim
 
         self.prev_features = self.get_pre_features()
         # DIM: nBatches x (nTimesteps + 1) x feature_dim
@@ -38,10 +38,10 @@ class ModelBehContinuous:
         if s_size != 0:
             self.prev_states = self.get_pre_state()
             rnn_in = tf.concat(values=[self.prev_rewards, self.prev_features, self.prev_states], axis=2)
-            # DIM: nBatches x (nTimesteps + 1) x (reward_dim + feature_dim + s_size)
+            # DIM: nBatches x (nTimesteps + 1) x (2*feature_dim + s_size)
         else:
             rnn_in = tf.concat(values=[self.prev_rewards, self.prev_features], axis=2)
-            # DIM: nBatches x (nTimesteps + 1) x (reward_dim + feature_dim)
+            # DIM: nBatches x (nTimesteps + 1) x (2*feature_dim)
 
         self.rnn_in = rnn_in
 
@@ -51,8 +51,8 @@ class ModelBehContinuous:
 
         Args:
             features: [n_batches, n_timesteps, feature_dim] - continuous features
-            rewards: [n_batches, n_timesteps] or [n_batches, n_timesteps, reward_dim]
-                    - scalar or multi-dimensional rewards
+            rewards: [n_batches, n_timesteps] or [n_batches, n_timesteps, feature_dim]
+                    - scalar rewards (will be tiled to feature_dim) or multi-dimensional rewards
             states: [n_batches, n_timesteps, s_size] - optional external states
 
         Returns:
@@ -67,8 +67,11 @@ class ModelBehContinuous:
         # Handle both scalar (2D) and multi-dimensional (3D) rewards
         if len(rewards.shape) == 2:
             # Scalar rewards: [n_batches, n_timesteps]
+            # Expand to match feature_dim by repeating the scalar value
             prev_rewards = np.hstack((np.zeros((rewards.shape[0], 1)), rewards))
-            prev_rewards = prev_rewards[:, :, np.newaxis]  # Add dimension for concat
+            prev_rewards = prev_rewards[:, :, np.newaxis]  # Shape: [n_batches, n_timesteps+1, 1]
+            # Broadcast to feature_dim
+            prev_rewards = np.tile(prev_rewards, (1, 1, self.feature_dim))  # Shape: [n_batches, n_timesteps+1, feature_dim]
         else:
             # Multi-dimensional rewards: [n_batches, n_timesteps, reward_dim]
             prev_rewards = np.concatenate(
@@ -88,8 +91,8 @@ class ModelBehContinuous:
         return feed_dict
 
     def get_pre_reward(self):
-        """Placeholder for previous rewards (scalar or multi-dimensional)"""
-        return tf.compat.v1.placeholder(shape=[None, None, None], dtype=Const.FLOAT)
+        """Placeholder for previous rewards (multi-dimensional, matching feature_dim)"""
+        return tf.compat.v1.placeholder(shape=[None, None, self.feature_dim], dtype=Const.FLOAT)
 
     def get_pre_features(self):
         """Placeholder for previous continuous features"""
