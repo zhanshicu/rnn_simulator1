@@ -94,17 +94,23 @@ with tf.device('/CPU:0'):
 with tf.device('/CPU:0'):
     dense1 = tf.compat.v1.layers.dense(inputs=z, units=100, activation=tf.nn.tanh)
     # ... all hypernetwork layers
+
+# In expr/train_continuous.py train_model() - optimizer and gradients
+with tf.device('/CPU:0'):
+    total_loss = model.dec.loss + beta_ph * model.enc.loss
+    optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=lr_ph)
+    train_op = optimizer.minimize(total_loss, var_list=trainables)
 ```
 
 **Files Modified:**
-- `expr/train_continuous.py` (lines 16-20, 190-211)
-- `util/losses.py` (lines 89-92)
+- `expr/train_continuous.py` (lines 16-20 - env vars, lines 168-178 - gradient/optimizer CPU placement, lines 190-213 - session config)
+- `util/losses.py` (lines 89-92 - dtype consistency)
 - `util/utils.py` (lines 188-189 - CPU device placement for exp)
 - `model/enc_continuous.py` (lines 60-66, 73-79 - CPU device placement for bidirectional RNN)
 - `model/mmdae_enc_continuous.py` (lines 38-69 - CPU device placement for encoder dense layers)
 - `model/dec_continuous.py` (lines 75-82 - CPU device placement for GRU, lines 213-217 - CPU device placement for hypernetwork)
-- `model/rnn_cell.py` (lines 177-180, 204-207)
-- `setup_tf_compat.py` (lines 65-70)
+- `model/rnn_cell.py` (lines 177-180, 204-207 - session config for tests)
+- `setup_tf_compat.py` (lines 65-70 - env vars for Jupyter)
 
 ### 2. KeyError: 'features'
 

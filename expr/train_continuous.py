@@ -164,16 +164,18 @@ def train_model(
     )
 
     # Define loss and optimizer
-    trainables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
+    # Force CPU execution for gradient computation to bypass XLA JIT compilation
+    with tf.device('/CPU:0'):
+        trainables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
 
-    beta_ph = tf.compat.v1.placeholder(Const.FLOAT, shape=())
-    lr_ph = tf.compat.v1.placeholder(Const.FLOAT, shape=())
+        beta_ph = tf.compat.v1.placeholder(Const.FLOAT, shape=())
+        lr_ph = tf.compat.v1.placeholder(Const.FLOAT, shape=())
 
-    # Combined loss: decoder reconstruction + beta * encoder MMD
-    total_loss = model.dec.loss + beta_ph * model.enc.loss
+        # Combined loss: decoder reconstruction + beta * encoder MMD
+        total_loss = model.dec.loss + beta_ph * model.enc.loss
 
-    optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=lr_ph)
-    train_op = optimizer.minimize(total_loss, var_list=trainables)
+        optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=lr_ph)
+        train_op = optimizer.minimize(total_loss, var_list=trainables)
 
     # Initialize session with comprehensive XLA/JIT compilation disabled
     # This prevents "JIT compilation failed" errors with XLA on certain operations
