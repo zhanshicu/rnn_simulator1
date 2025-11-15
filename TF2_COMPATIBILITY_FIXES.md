@@ -59,11 +59,24 @@ config.graph_options.rewrite_options.disable_meta_optimizer = True
 config.graph_options.rewrite_options.constant_folding = RewriterConfig.OFF
 config.graph_options.rewrite_options.arithmetic_optimization = RewriterConfig.OFF
 config.graph_options.rewrite_options.layout_optimizer = RewriterConfig.OFF
+config.graph_options.rewrite_options.remapping = RewriterConfig.OFF
+config.graph_options.rewrite_options.auto_mixed_precision = RewriterConfig.OFF
+config.graph_options.rewrite_options.pin_to_host_optimization = RewriterConfig.OFF
+config.graph_options.rewrite_options.scoped_allocator_optimization = RewriterConfig.OFF
+config.allow_soft_placement = True
+```
+
+#### Layer 5: Explicit CPU Device Placement
+```python
+# In util/utils.py gaussian_kernel_matrix()
+with tf.device('/CPU:0'):
+    exp_result = tf.exp(-s)
 ```
 
 **Files Modified:**
-- `expr/train_continuous.py` (lines 15-17, 162-181)
+- `expr/train_continuous.py` (lines 15-17, 190-211)
 - `util/losses.py` (lines 89-92)
+- `util/utils.py` (lines 185-190 - CPU device placement)
 - `model/rnn_cell.py` (lines 177-180, 204-207)
 
 ### 2. KeyError: 'features'

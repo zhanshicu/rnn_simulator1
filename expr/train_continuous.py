@@ -192,11 +192,23 @@ def train_model(
         config.graph_options.rewrite_options.constant_folding = rewriter_config_pb2.RewriterConfig.OFF
         config.graph_options.rewrite_options.arithmetic_optimization = rewriter_config_pb2.RewriterConfig.OFF
         config.graph_options.rewrite_options.layout_optimizer = rewriter_config_pb2.RewriterConfig.OFF
+        config.graph_options.rewrite_options.remapping = rewriter_config_pb2.RewriterConfig.OFF
+        config.graph_options.rewrite_options.auto_mixed_precision = rewriter_config_pb2.RewriterConfig.OFF
+        config.graph_options.rewrite_options.pin_to_host_optimization = rewriter_config_pb2.RewriterConfig.OFF
+        config.graph_options.rewrite_options.scoped_allocator_optimization = rewriter_config_pb2.RewriterConfig.OFF
     else:
         # Fallback: use integer values directly (OFF = 0)
         config.graph_options.rewrite_options.constant_folding = 0
         config.graph_options.rewrite_options.arithmetic_optimization = 0
         config.graph_options.rewrite_options.layout_optimizer = 0
+        config.graph_options.rewrite_options.remapping = 0
+        config.graph_options.rewrite_options.auto_mixed_precision = 0
+        config.graph_options.rewrite_options.pin_to_host_optimization = 0
+        config.graph_options.rewrite_options.scoped_allocator_optimization = 0
+
+    # Explicitly disable device placement optimization which can trigger XLA
+    config.allow_soft_placement = True
+    config.log_device_placement = False
 
     sess = tf.compat.v1.Session(config=config)
     sess.run(tf.compat.v1.global_variables_initializer())
