@@ -2,6 +2,10 @@
 Decoder RNN for continuous behavioral features.
 Uses hypernetwork: latent code z -> RNN weights -> continuous predictions.
 """
+import os
+# Force TensorFlow to use Keras 2 (required for compatibility with TF 1.x code)
+os.environ['TF_USE_LEGACY_KERAS'] = '1'
+
 import tensorflow as tf
 import numpy as np
 

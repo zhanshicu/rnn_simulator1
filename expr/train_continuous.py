@@ -5,6 +5,9 @@ Trains on simulated salesperson learning data.
 import sys
 import os
 
+# Force TensorFlow to use Keras 2 (required for compatibility with TF 1.x code)
+os.environ['TF_USE_LEGACY_KERAS'] = '1'
+
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
