@@ -7,6 +7,9 @@ import os
 
 # Force TensorFlow to use Keras 2 (required for compatibility with TF 1.x code)
 os.environ['TF_USE_LEGACY_KERAS'] = '1'
+# Disable XLA JIT compilation (incompatible with TF 1.x-style code)
+os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices=false'
+os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir='
 
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
