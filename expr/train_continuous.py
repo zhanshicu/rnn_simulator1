@@ -162,9 +162,14 @@ def train_model(
     optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=lr_ph)
     train_op = optimizer.minimize(total_loss, var_list=trainables)
 
-    # Initialize session with XLA JIT disabled
+    # Initialize session with XLA JIT and all optimizations disabled
     config = tf.compat.v1.ConfigProto()
     config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.OFF
+    config.graph_options.optimizer_options.opt_level = tf.compat.v1.OptimizerOptions.L0
+    config.graph_options.rewrite_options.disable_meta_optimizer = True
+    config.graph_options.rewrite_options.constant_folding = tf.compat.v1.rewriter_config_pb2.RewriterConfig.OFF
+    config.graph_options.rewrite_options.arithmetic_optimization = tf.compat.v1.rewriter_config_pb2.RewriterConfig.OFF
+    config.graph_options.rewrite_options.auto_mixed_precision = tf.compat.v1.rewriter_config_pb2.RewriterConfig.OFF
     sess = tf.compat.v1.Session(config=config)
     sess.run(tf.compat.v1.global_variables_initializer())
 
