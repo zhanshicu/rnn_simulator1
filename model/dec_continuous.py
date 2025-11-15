@@ -175,7 +175,7 @@ class DECRNNContinuous(ModelBehContinuous):
     def rand_without_replacement(self, n_rands):
         """Random permutation for baseline comparison"""
         probs = tf.ones(shape=(n_rands,), dtype=Const.FLOAT) / tf.cast(n_rands, dtype=Const.FLOAT)
-        ztmp = -tf.log(-tf.log(tf.compat.v1.random_uniform(tf.shape(probs), 0, 1, dtype=Const.FLOAT)))
+        ztmp = -tf.math.log(-tf.math.log(tf.compat.v1.random_uniform(tf.shape(probs), 0, 1, dtype=Const.FLOAT)))
         _, indices = tf.nn.top_k(probs + ztmp, n_rands)
         return indices
 
