@@ -208,11 +208,13 @@ class DECRNNContinuous(ModelBehContinuous7D):
                            W_out_dim[0] * W_out_dim[1] + b_out_dim[0])
 
         # Hypernetwork: 3-layer MLP from z to weights
+        # Force CPU execution to bypass XLA JIT compilation
         with tf.compat.v1.variable_scope('dec'):
-            dense1 = tf.compat.v1.layers.dense(inputs=z, units=100, activation=tf.nn.tanh)
-            dense2 = tf.compat.v1.layers.dense(inputs=dense1, units=100, activation=tf.nn.tanh)
-            dense3 = tf.compat.v1.layers.dense(inputs=dense2, units=100, activation=tf.nn.tanh)
-            output = tf.compat.v1.layers.dense(inputs=dense3, units=total_weight_dim, activation=None)
+            with tf.device('/CPU:0'):
+                dense1 = tf.compat.v1.layers.dense(inputs=z, units=100, activation=tf.nn.tanh)
+                dense2 = tf.compat.v1.layers.dense(inputs=dense1, units=100, activation=tf.nn.tanh)
+                dense3 = tf.compat.v1.layers.dense(inputs=dense2, units=100, activation=tf.nn.tanh)
+                output = tf.compat.v1.layers.dense(inputs=dense3, units=total_weight_dim, activation=None)
 
         # Unpack weights
         with tf.compat.v1.variable_scope('dec_init'):

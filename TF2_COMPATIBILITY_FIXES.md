@@ -71,17 +71,29 @@ config.allow_soft_placement = True
 
 #### Layer 5: Explicit CPU Device Placement
 ```python
-# In util/utils.py gaussian_kernel_matrix()
+# In util/utils.py gaussian_kernel_matrix() - exp operation
 with tf.device('/CPU:0'):
     exp_result = tf.exp(-s)
 
-# In model/enc_continuous.py rnn_cells()
+# In model/enc_continuous.py rnn_cells() - bidirectional LSTM
 with tf.device('/CPU:0'):
     output, state = tf.compat.v1.nn.bidirectional_dynamic_rnn(...)
 
-# In model/dec_continuous.py __init__()
+# In model/mmdae_enc_continuous.py __init__() - encoder dense layers
+with tf.device('/CPU:0'):
+    dense1 = tf.compat.v1.layers.dense(inputs=out, units=n_cells, activation=tf.nn.relu)
+    dense2 = tf.compat.v1.layers.dense(inputs=dense1, units=n_cells, activation=tf.nn.relu)
+    dense3 = tf.compat.v1.layers.dense(inputs=dense2, units=10, activation=tf.nn.softplus)
+    # ... all encoder operations
+
+# In model/dec_continuous.py __init__() - GRU decoder
 with tf.device('/CPU:0'):
     self.state_track, self.last_state = self.cell.dynamic_rnn(...)
+
+# In model/dec_continuous.py z_to_RNNweights() - hypernetwork dense layers
+with tf.device('/CPU:0'):
+    dense1 = tf.compat.v1.layers.dense(inputs=z, units=100, activation=tf.nn.tanh)
+    # ... all hypernetwork layers
 ```
 
 **Files Modified:**
@@ -89,7 +101,8 @@ with tf.device('/CPU:0'):
 - `util/losses.py` (lines 89-92)
 - `util/utils.py` (lines 188-189 - CPU device placement for exp)
 - `model/enc_continuous.py` (lines 60-66, 73-79 - CPU device placement for bidirectional RNN)
-- `model/dec_continuous.py` (lines 75-82 - CPU device placement for GRU)
+- `model/mmdae_enc_continuous.py` (lines 38-69 - CPU device placement for encoder dense layers)
+- `model/dec_continuous.py` (lines 75-82 - CPU device placement for GRU, lines 213-217 - CPU device placement for hypernetwork)
 - `model/rnn_cell.py` (lines 177-180, 204-207)
 - `setup_tf_compat.py` (lines 65-70)
 
