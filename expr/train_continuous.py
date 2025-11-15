@@ -13,8 +13,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 os.environ['TF_USE_LEGACY_KERAS'] = '1'
 
 # Disable XLA JIT compilation via environment variables
-os.environ['TF_XLA_FLAGS'] = '--tf_xla_auto_jit=0'
+os.environ['TF_XLA_FLAGS'] = '--tf_xla_auto_jit=0 --tf_xla_enable_xla_devices=false'
 os.environ['TF_XLA_ENABLE_XLA_DEVICES'] = 'false'
+# Additional XLA disabling for TensorFlow 2.20.0+
+os.environ['TF_DISABLE_XLA'] = '1'
+os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=""'
 
 import tensorflow as tf
 # Enable TF1.x compatibility mode (required for Session-based code)

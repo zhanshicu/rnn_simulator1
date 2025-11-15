@@ -62,9 +62,12 @@ print("✓ Set TF_USE_LEGACY_KERAS=1 (using TF-Keras instead of Keras 3)")
 
 # Disable XLA JIT compilation
 # This prevents "JIT compilation failed" errors
-os.environ['TF_XLA_FLAGS'] = '--tf_xla_auto_jit=0'
+os.environ['TF_XLA_FLAGS'] = '--tf_xla_auto_jit=0 --tf_xla_enable_xla_devices=false'
 os.environ['TF_XLA_ENABLE_XLA_DEVICES'] = 'false'
-print("✓ Disabled XLA JIT compilation")
+# Additional XLA disabling for TensorFlow 2.20.0+
+os.environ['TF_DISABLE_XLA'] = '1'
+os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=""'
+print("✓ Disabled XLA JIT compilation (comprehensive)")
 
 print("\nTensorFlow compatibility setup complete!")
 print("You can now safely import tensorflow and other modules.")

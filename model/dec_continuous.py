@@ -71,13 +71,15 @@ class DECRNNContinuous(ModelBehContinuous7D):
         step_size = tf.ones([tf.shape(self.rnn_in)[0]], dtype=tf.int32) * tf.shape(self.rnn_in)[1]
 
         # Run RNN forward
-        if static_loop:
-            self.state_track, self.last_state = self.cell.static_rnn(self.rnn_in, step_size)
-        else:
-            self.state_track, self.last_state = self.cell.dynamic_rnn(self.rnn_in, step_size)
-        # state_track: [n_samples, n_batches, n_timesteps+1, n_cells]
+        # Force CPU execution to bypass XLA JIT compilation
+        with tf.device('/CPU:0'):
+            if static_loop:
+                self.state_track, self.last_state = self.cell.static_rnn(self.rnn_in, step_size)
+            else:
+                self.state_track, self.last_state = self.cell.dynamic_rnn(self.rnn_in, step_size)
+            # state_track: [n_samples, n_batches, n_timesteps+1, n_cells]
 
-        sstate_track, slast_state = self.scell.dynamic_rnn(self.rnn_in, step_size)
+            sstate_track, slast_state = self.scell.dynamic_rnn(self.rnn_in, step_size)
 
         # Generate continuous feature predictions
         # Predictions: linear projection from hidden state to feature space

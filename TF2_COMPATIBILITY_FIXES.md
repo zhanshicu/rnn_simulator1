@@ -35,8 +35,11 @@ UnknownError: JIT compilation failed.
 #### Layer 1: Environment Variables
 ```python
 # Must be set BEFORE importing TensorFlow
-os.environ['TF_XLA_FLAGS'] = '--tf_xla_auto_jit=0'
+os.environ['TF_XLA_FLAGS'] = '--tf_xla_auto_jit=0 --tf_xla_enable_xla_devices=false'
 os.environ['TF_XLA_ENABLE_XLA_DEVICES'] = 'false'
+# Additional for TensorFlow 2.20.0+
+os.environ['TF_DISABLE_XLA'] = '1'
+os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=""'
 ```
 
 #### Layer 2: Dtype Consistency
@@ -71,13 +74,24 @@ config.allow_soft_placement = True
 # In util/utils.py gaussian_kernel_matrix()
 with tf.device('/CPU:0'):
     exp_result = tf.exp(-s)
+
+# In model/enc_continuous.py rnn_cells()
+with tf.device('/CPU:0'):
+    output, state = tf.compat.v1.nn.bidirectional_dynamic_rnn(...)
+
+# In model/dec_continuous.py __init__()
+with tf.device('/CPU:0'):
+    self.state_track, self.last_state = self.cell.dynamic_rnn(...)
 ```
 
 **Files Modified:**
-- `expr/train_continuous.py` (lines 15-17, 190-211)
+- `expr/train_continuous.py` (lines 16-20, 190-211)
 - `util/losses.py` (lines 89-92)
-- `util/utils.py` (lines 185-190 - CPU device placement)
+- `util/utils.py` (lines 188-189 - CPU device placement for exp)
+- `model/enc_continuous.py` (lines 60-66, 73-79 - CPU device placement for bidirectional RNN)
+- `model/dec_continuous.py` (lines 75-82 - CPU device placement for GRU)
 - `model/rnn_cell.py` (lines 177-180, 204-207)
+- `setup_tf_compat.py` (lines 65-70)
 
 ### 2. KeyError: 'features'
 
@@ -253,9 +267,11 @@ import os
 # Use legacy TF-Keras instead of Keras 3
 os.environ['TF_USE_LEGACY_KERAS'] = '1'
 
-# Disable XLA JIT compilation
-os.environ['TF_XLA_FLAGS'] = '--tf_xla_auto_jit=0'
+# Disable XLA JIT compilation (comprehensive for TF 2.20.0+)
+os.environ['TF_XLA_FLAGS'] = '--tf_xla_auto_jit=0 --tf_xla_enable_xla_devices=false'
 os.environ['TF_XLA_ENABLE_XLA_DEVICES'] = 'false'
+os.environ['TF_DISABLE_XLA'] = '1'
+os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=""'
 
 # NOW import TensorFlow
 import tensorflow as tf
