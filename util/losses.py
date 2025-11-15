@@ -86,8 +86,10 @@ def mmd_loss(source_samples, target_samples, weight, scope=None):
       1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 5, 10, 15, 20, 25, 30, 35, 100,
       1e3, 1e4, 1e5, 1e6
   ]
+  # Explicitly cast sigmas to Const.FLOAT to ensure dtype consistency
+  # This prevents XLA JIT compilation errors with mixed float32/float64
   gaussian_kernel = partial(
-      gaussian_kernel_matrix, sigmas=tf.constant(sigmas))
+      gaussian_kernel_matrix, sigmas=tf.constant(sigmas, dtype=Const.FLOAT))
 
   loss_value = maximum_mean_discrepancy(
       source_samples, target_samples, kernel=gaussian_kernel)

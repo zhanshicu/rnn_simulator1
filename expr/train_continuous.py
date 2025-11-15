@@ -8,6 +8,11 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+# Disable XLA JIT compilation via environment variables
+# This must be done BEFORE importing TensorFlow
+os.environ['TF_XLA_FLAGS'] = '--tf_xla_auto_jit=0'
+os.environ['TF_XLA_ENABLE_XLA_DEVICES'] = 'false'
+
 import tensorflow as tf
 # Enable TF1.x compatibility mode (required for Session-based code)
 tf.compat.v1.disable_eager_execution()
@@ -154,10 +159,27 @@ def train_model(
     optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=lr_ph)
     train_op = optimizer.minimize(total_loss, var_list=trainables)
 
-    # Initialize session with JIT compilation disabled
-    # This prevents "JIT compilation failed" errors with XLA
+    # Initialize session with comprehensive XLA/JIT compilation disabled
+    # This prevents "JIT compilation failed" errors with XLA on certain operations
     config = tf.compat.v1.ConfigProto()
+
+    # Disable all XLA JIT compilation
     config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.OFF
+
+    # Disable XLA auto-clustering (prevents automatic JIT compilation of subgraphs)
+    config.graph_options.optimizer_options.do_common_subexpression_elimination = False
+    config.graph_options.optimizer_options.do_function_inlining = False
+    config.graph_options.optimizer_options.do_constant_folding = False
+
+    # Disable additional graph rewrites that might trigger XLA
+    config.graph_options.rewrite_options.disable_meta_optimizer = True
+    config.graph_options.rewrite_options.constant_folding = (
+        tf.compat.v1.rewriter_config_pb2.RewriterConfig.OFF)
+    config.graph_options.rewrite_options.arithmetic_optimization = (
+        tf.compat.v1.rewriter_config_pb2.RewriterConfig.OFF)
+    config.graph_options.rewrite_options.layout_optimizer = (
+        tf.compat.v1.rewriter_config_pb2.RewriterConfig.OFF)
+
     sess = tf.compat.v1.Session(config=config)
     sess.run(tf.compat.v1.global_variables_initializer())
 
