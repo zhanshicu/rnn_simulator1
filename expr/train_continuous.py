@@ -162,8 +162,10 @@ def train_model(
     optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=lr_ph)
     train_op = optimizer.minimize(total_loss, var_list=trainables)
 
-    # Initialize session
-    sess = tf.compat.v1.Session()
+    # Initialize session with XLA JIT disabled
+    config = tf.compat.v1.ConfigProto()
+    config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.OFF
+    sess = tf.compat.v1.Session(config=config)
     sess.run(tf.compat.v1.global_variables_initializer())
 
     DLogger.logger().info("Starting training...")
