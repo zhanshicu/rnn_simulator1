@@ -13,6 +13,7 @@ This repository was originally written for TensorFlow 1.x and has been updated f
 | **AttributeError: tf.is_finite** | Deprecated API | Replace with `tf.math.is_finite` | `util/losses.py` (4 locations) |
 | **AttributeError: dense not available** | Keras 3 incompatibility | Set `TF_USE_LEGACY_KERAS=1` | `expr/train_continuous.py`, `setup_tf_compat.py` |
 | **AttributeError: tf.log** | Deprecated API | Replace with `tf.math.log` | `model/dec_continuous.py`, `util/helper.py`, `util/losses.py` |
+| **ValueError: Dimension mismatch** | Scalar vs 7D reward mismatch | Use `ModelBehContinuous7D` base class | `model/enc_continuous.py`, `model/dec_continuous.py` |
 
 ## Detailed Fix Breakdown
 
@@ -156,6 +157,52 @@ ztmp = -tf.math.log(-tf.math.log(tf.compat.v1.random_uniform(...)))
 - `util/helper.py` (line 215 - 2 occurrences)
 - `util/losses.py` (line 268 - 1 occurrence)
 
+### 6. Dimension Mismatch (7D Rewards)
+
+**Error Message:**
+```
+ValueError: all the input arrays must have same number of dimensions, but the array at index 0 has 2 dimension(s) and the array at index 1 has 3 dimension(s)
+```
+
+**Root Cause:**
+- The salesperson simulator generates 7D rewards: `[n_batches, n_timesteps, 7]`
+- The encoder and decoder inherited from `ModelBehContinuous`, which expects scalar rewards: `[n_batches, n_timesteps]`
+- The `beh_feed` method in `ModelBehContinuous` uses `np.hstack` which requires 2D arrays
+
+**Solution:**
+Modified encoder and decoder to inherit from `ModelBehContinuous7D`:
+
+```python
+# Before (enc_continuous.py and dec_continuous.py)
+from model.model_beh_continuous import ModelBehContinuous
+class ENCRNNContinuous(ModelBehContinuous):
+    def __init__(self, ...):
+        super().__init__(feature_dim, s_size)
+
+# After
+from model.model_beh_continuous_7d import ModelBehContinuous7D
+class ENCRNNContinuous(ModelBehContinuous7D):
+    def __init__(self, ...):
+        super().__init__(feature_dim, reward_dim=feature_dim, s_size=s_size)
+```
+
+Updated RNN input dimension calculation in decoder:
+```python
+# Before (dec_continuous.py line 199)
+W1_dim, b1_dim, W2_dim, b2_dim = GRUCell2.get_weight_dims(
+    self.feature_dim + s_size + 1, n_cells  # +1 for scalar reward
+)
+
+# After
+W1_dim, b1_dim, W2_dim, b2_dim = GRUCell2.get_weight_dims(
+    self.feature_dim + s_size + self.reward_dim, n_cells  # +reward_dim for 7D rewards
+)
+```
+
+**Files Modified:**
+- `model/enc_continuous.py` (lines 9, 13, 28)
+- `model/dec_continuous.py` (lines 9, 14, 32, 199)
+
 ## Usage Instructions
 
 ### For Python Scripts
@@ -209,6 +256,7 @@ import tensorflow as tf
 | `tf.log()` | `tf.math.log()` | ✅ Fixed |
 | `tf.compat.v1.layers.dense()` | Still available with `TF_USE_LEGACY_KERAS=1` | ✅ Fixed |
 | XLA auto-JIT | Disabled via env vars + session config | ✅ Fixed |
+| Scalar reward assumption | Use `ModelBehContinuous7D` for 7D rewards | ✅ Fixed |
 
 ## Testing
 

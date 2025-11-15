@@ -6,12 +6,12 @@ import tensorflow as tf
 import numpy as np
 
 from model.consts import Const
-from model.model_beh_continuous import ModelBehContinuous
+from model.model_beh_continuous_7d import ModelBehContinuous7D
 from model.rnn_cell import GRUCell2
 from util import DLogger
 
 
-class DECRNNContinuous(ModelBehContinuous):
+class DECRNNContinuous(ModelBehContinuous7D):
     """
     Decoder that generates continuous feature predictions.
 
@@ -29,7 +29,7 @@ class DECRNNContinuous(ModelBehContinuous):
     """
 
     def __init__(self, n_cells, feature_dim, s_size, n_samples, z, n_T, static_loop):
-        super().__init__(feature_dim, s_size)
+        super().__init__(feature_dim, reward_dim=feature_dim, s_size=s_size)
 
         DLogger.logger().debug("Continuous decoder created with n_cells: " + str(n_cells))
 
@@ -196,7 +196,7 @@ class DECRNNContinuous(ModelBehContinuous):
             W1, W2, W_out, b1, b2, b_out: RNN weight matrices
         """
         W1_dim, b1_dim, W2_dim, b2_dim = GRUCell2.get_weight_dims(
-            self.feature_dim + s_size + 1, n_cells
+            self.feature_dim + s_size + self.reward_dim, n_cells
         )
         W_out_dim = [n_cells, feature_dim]
         b_out_dim = [feature_dim]

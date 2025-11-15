@@ -6,11 +6,11 @@ import tensorflow as tf
 from tensorflow.python.ops.rnn_cell_impl import LSTMCell
 
 from model.consts import Const
-from model.model_beh_continuous import ModelBehContinuous
+from model.model_beh_continuous_7d import ModelBehContinuous7D
 from util import DLogger
 
 
-class ENCRNNContinuous(ModelBehContinuous):
+class ENCRNNContinuous(ModelBehContinuous7D):
     """
     Encoder that processes continuous feature sequences.
 
@@ -25,7 +25,7 @@ class ENCRNNContinuous(ModelBehContinuous):
     """
 
     def __init__(self, n_cells, feature_dim, s_size, latent_size, n_samples, n_T, static_loop):
-        super().__init__(feature_dim, s_size)
+        super().__init__(feature_dim, reward_dim=feature_dim, s_size=s_size)
         DLogger.logger().debug("Encoder created with n_cells: " + str(n_cells))
 
         self.static_loop = static_loop
