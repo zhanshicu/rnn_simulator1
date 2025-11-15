@@ -15,6 +15,8 @@ os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir='
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import tensorflow as tf
+# Disable JIT compilation (XLA) - incompatible with TF 1.x code
+tf.config.optimizer.set_jit(False)
 # Enable TF1.x compatibility mode (required for Session-based code)
 tf.compat.v1.disable_eager_execution()
 
