@@ -29,13 +29,16 @@ def split_train_test(batched_data, train_ratio=0.8):
     Split data into train and test sets.
 
     Args:
-        batched_data: Dictionary with features, rewards, seq_lengths, etc.
+        batched_data: Dictionary with actions, rewards, seq_lengths, etc.
         train_ratio: Fraction of data for training
 
     Returns:
         train_data, test_data: Dictionaries with split data
     """
-    n_samples = batched_data['features'].shape[0]
+    # Support both 'actions' and 'features' as key names for backward compatibility
+    feature_key = 'actions' if 'actions' in batched_data else 'features'
+
+    n_samples = batched_data[feature_key].shape[0]
     n_train = int(n_samples * train_ratio)
 
     # Shuffle indices
@@ -44,7 +47,7 @@ def split_train_test(batched_data, train_ratio=0.8):
     test_indices = indices[n_train:]
 
     train_data = {
-        'features': batched_data['features'][train_indices],
+        'actions': batched_data[feature_key][train_indices],
         'rewards': batched_data['rewards'][train_indices],
         'seq_lengths': batched_data['seq_lengths'][train_indices],
         'ids': [batched_data['ids'][i] for i in train_indices],
@@ -53,7 +56,7 @@ def split_train_test(batched_data, train_ratio=0.8):
     }
 
     test_data = {
-        'features': batched_data['features'][test_indices],
+        'actions': batched_data[feature_key][test_indices],
         'rewards': batched_data['rewards'][test_indices],
         'seq_lengths': batched_data['seq_lengths'][test_indices],
         'ids': [batched_data['ids'][i] for i in test_indices],
@@ -69,13 +72,13 @@ def create_batches(data, batch_size):
     Create mini-batches from data.
 
     Args:
-        data: Dictionary with features, rewards, seq_lengths
+        data: Dictionary with actions, rewards, seq_lengths
         batch_size: Batch size
 
     Returns:
         List of batch dictionaries
     """
-    n_samples = data['features'].shape[0]
+    n_samples = data['actions'].shape[0]
     n_batches = (n_samples + batch_size - 1) // batch_size
 
     batches = []
@@ -84,7 +87,7 @@ def create_batches(data, batch_size):
         end_idx = min((i + 1) * batch_size, n_samples)
 
         batch = {
-            'features': data['features'][start_idx:end_idx],
+            'actions': data['actions'][start_idx:end_idx],
             'rewards': data['rewards'][start_idx:end_idx],
             'seq_lengths': data['seq_lengths'][start_idx:end_idx]
         }
@@ -126,13 +129,13 @@ def train_model(
     tf.compat.v1.set_random_seed(42)
 
     # Get data dimensions
-    feature_dim = train_data['features'].shape[2]
-    max_seq_length = train_data['features'].shape[1]
+    feature_dim = train_data['actions'].shape[2]
+    max_seq_length = train_data['actions'].shape[1]
 
     DLogger.logger().info(f"Feature dimension: {feature_dim}")
     DLogger.logger().info(f"Max sequence length: {max_seq_length}")
-    DLogger.logger().info(f"Training samples: {train_data['features'].shape[0]}")
-    DLogger.logger().info(f"Test samples: {test_data['features'].shape[0]}")
+    DLogger.logger().info(f"Training samples: {train_data['actions'].shape[0]}")
+    DLogger.logger().info(f"Test samples: {test_data['actions'].shape[0]}")
 
     # Create model
     DLogger.logger().info("Building model...")
@@ -197,14 +200,14 @@ def train_model(
         for batch_idx, batch in enumerate(batches):
             # Create feed dict
             enc_dict = model.enc.enc_beh_feed(
-                batch['features'],
+                batch['actions'],
                 batch['rewards'],
                 None,  # No states
                 batch['seq_lengths']
             )
 
             dec_dict = model.dec.dec_beh_feed(
-                batch['features'],
+                batch['actions'],
                 batch['rewards'],
                 None,  # No states
                 batch['seq_lengths']
@@ -236,18 +239,18 @@ def train_model(
         # Evaluate on test set every 10 epochs
         if epoch % 10 == 0:
             # Test evaluation
-            test_batches = create_batches(test_data, batch_size=test_data['features'].shape[0])
+            test_batches = create_batches(test_data, batch_size=test_data['actions'].shape[0])
             test_batch = test_batches[0]
 
             enc_dict_test = model.enc.enc_beh_feed(
-                test_batch['features'],
+                test_batch['actions'],
                 test_batch['rewards'],
                 None,
                 test_batch['seq_lengths']
             )
 
             dec_dict_test = model.dec.dec_beh_feed(
-                test_batch['features'],
+                test_batch['actions'],
                 test_batch['rewards'],
                 None,
                 test_batch['seq_lengths']
@@ -303,7 +306,7 @@ def analyze_latent_representations(sess, model, data, n_samples=10):
 
     # Extract latent codes for all data
     enc_dict = model.enc.enc_beh_feed(
-        data['features'],
+        data['actions'],
         data['rewards'],
         None,
         data['seq_lengths']
@@ -345,13 +348,13 @@ def test_predictions(sess, model, data, person_idx=0):
     DLogger.logger().info(f"Salesperson: {data['ids'][person_idx]} ({data['archetypes'][person_idx]})")
 
     # Get single person data
-    features = data['features'][person_idx:person_idx+1]
+    actions = data['actions'][person_idx:person_idx+1]
     rewards = data['rewards'][person_idx:person_idx+1]
     seq_lengths = data['seq_lengths'][person_idx:person_idx+1]
 
     # Create feed dict
-    enc_dict = model.enc.enc_beh_feed(features, rewards, None, seq_lengths)
-    dec_dict = model.dec.dec_beh_feed(features, rewards, None, seq_lengths)
+    enc_dict = model.enc.enc_beh_feed(actions, rewards, None, seq_lengths)
+    dec_dict = model.dec.dec_beh_feed(actions, rewards, None, seq_lengths)
     feed_dict = {**enc_dict, **dec_dict}
 
     # Get predictions
@@ -362,13 +365,13 @@ def test_predictions(sess, model, data, person_idx=0):
 
     # predictions shape: [n_samples=1, n_batches=1, n_timesteps+1, feature_dim]
     predictions = predictions[0, 0, :-1, :]  # Remove last timestep, take first sample and batch
-    true_features = features[0, :seq_lengths[0], :]
+    true_actions = actions[0, :seq_lengths[0], :]
 
     DLogger.logger().info(f"Learned latent: {latent[0]}")
     DLogger.logger().info(f"True latent: {data['latents'][person_idx]}")
 
     # Compute MSE
-    mse = np.mean((predictions[:seq_lengths[0]] - true_features) ** 2)
+    mse = np.mean((predictions[:seq_lengths[0]] - true_actions) ** 2)
     DLogger.logger().info(f"Reconstruction MSE: {mse:.2f}")
 
     DLogger.logger().info(f"\nFirst 3 timesteps comparison:")
@@ -377,7 +380,7 @@ def test_predictions(sess, model, data, person_idx=0):
         DLogger.logger().info(f"\nTimestep {t}:")
         for feat_idx, feat_name in enumerate(feature_names):
             DLogger.logger().info(
-                f"  {feat_name:10s}: True={true_features[t, feat_idx]:5.1f}, "
+                f"  {feat_name:10s}: True={true_actions[t, feat_idx]:5.1f}, "
                 f"Pred={predictions[t, feat_idx]:5.1f}"
             )
 
