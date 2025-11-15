@@ -199,8 +199,9 @@ class DECRNNContinuous(ModelBehContinuous):
         Returns:
             W1, W2, W_out, b1, b2, b_out: RNN weight matrices
         """
+        # GRU input: rewards (feature_dim) + features (feature_dim) + states (s_size)
         W1_dim, b1_dim, W2_dim, b2_dim = GRUCell2.get_weight_dims(
-            self.feature_dim + s_size + 1, n_cells
+            2 * self.feature_dim + s_size, n_cells
         )
         W_out_dim = [n_cells, feature_dim]
         b_out_dim = [feature_dim]
