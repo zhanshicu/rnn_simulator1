@@ -212,7 +212,7 @@ def get_KL_normal(mu, sigma2, prior_mu, prior_sigma2):
     _half = tf.constant(0.5, dtype=Const.FLOAT)
     kl = tf.add(tf.div(tf.add(tf.square(tf.subtract(mu, prior_mu)), sigma2),
                        tf.multiply(tf.constant(2., dtype=Const.FLOAT), prior_sigma2))
-                , -_half + _half * tf.log(prior_sigma2) - _half * tf.log(sigma2))
+                , -_half + _half * tf.math.log(prior_sigma2) - _half * tf.math.log(sigma2))
 
     return tf.reduce_sum(kl)
 

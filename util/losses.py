@@ -263,7 +263,7 @@ def log_quaternion_loss_batch(predictions, labels, params):
         [internal_dot_products, tf.shape(internal_dot_products)],
         'internal_dot_products:')
 
-  logcost = tf.log(1e-4 + 1 - tf.abs(internal_dot_products))
+  logcost = tf.math.log(1e-4 + 1 - tf.abs(internal_dot_products))
   return logcost
 
 
