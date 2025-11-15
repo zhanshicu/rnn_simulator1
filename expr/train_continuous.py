@@ -8,8 +8,11 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+# Set environment variables BEFORE importing TensorFlow
+# Use legacy Keras (TF-Keras) instead of Keras 3 for compatibility
+os.environ['TF_USE_LEGACY_KERAS'] = '1'
+
 # Disable XLA JIT compilation via environment variables
-# This must be done BEFORE importing TensorFlow
 os.environ['TF_XLA_FLAGS'] = '--tf_xla_auto_jit=0'
 os.environ['TF_XLA_ENABLE_XLA_DEVICES'] = 'false'
 
